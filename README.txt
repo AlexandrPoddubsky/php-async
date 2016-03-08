@@ -4,8 +4,8 @@ PHP asynchronous execution framework
 
 This framework allows you to execute asynchronously arbitrary shell command from
 PHP process. It features the following functionality:
-* open for communication between the PHP process and the child one. Right now
-  we support reading child's STDOUT and STDERR.
+* open file descriptors for communication between the PHP process and the child
+  one. Right now we support reading child's STDOUT and STDERR.
 * ability to query whether the child process has finished its execution
 * query PID of the child process, possibly for sending signals to it
 * read exit code of the child process once it has finished its execution
@@ -78,7 +78,7 @@ Example of synchronous caching:
 <?php
 
 /**
- * Simply encapsulate doing something in a child process asynchronously.
+ * This function simply encapsulate starting a child process asynchronously.
  *
  * But let's put a bit on top of it. Before we take off to create a child
  * process, let's check if the results of $cmd are not available in cache. If
@@ -110,6 +110,7 @@ function do_something_asynchronously($cmd) {
  * them. We take the opportunity to store the results of asynchronous command
  * execution into our cache bin so next time they can be fetched much faster
  * from there.
+ */
 function my_process_callback($info, $cmd) {
   if ($info['exit'] == 0) {
     cache_bin_set($cmd, $info);
