@@ -73,6 +73,28 @@ $result = $child->result();
 
 ?>
 
+Additional file descriptors passed to your asynchronous command:
+----------------------------------------------------------------
+<?php
+$command = 'my-awesome-command';
+$args = array();
+
+// Sometimes your command will communicate on more file descriptors than just
+// STDOUT & STDERR. So you can provide additional file descriptors to your child
+// command, be it a pipe or an actual file.
+// See http://php.net/manual/en/function.proc-open.php for full list of
+// available options.
+$extra_descriptors = array(
+  4 => array('pipe', 'w'),
+);
+
+$result = new ToolsAsyncResult($cmd, $args, NULL, array(), $extra_descriptors)->result();
+
+// Let's see what our child command has communicated on the 4th file descriptor.
+$fd4 = $result['streams'][4];
+?>
+
+
 Example of synchronous caching:
 -------------------------------
 <?php

@@ -125,6 +125,10 @@ class ToolsAsyncResult implements ToolsResultInterface{
    *   your logic, you may use ToolsAsyncResult::decode() method to decode the
    *   content of the stream, if you are expecting non-scalar output from the
    *   asynchronous command
+   * - streams: (array) Array of additional output streams received from
+   *   asynchronous command, if you provided any additional file descriptors in
+   *   the constructor as $extra_descriptors variable. The array will be keyed
+   *   by file descriptor number
    *
    * The process callback should take in this input argument, interpret it per
    * its logic and return interpreted value. Return value of the process
@@ -186,8 +190,14 @@ class ToolsAsyncResult implements ToolsResultInterface{
    * @param array $process_callback_arguments
    *   Array of additional arguments to append, when invoking the process
    *   callback
+   * @param array $extra_descriptors
+   *   Additional file descriptors to be passed on to the command. The key will
+   *   be descriptor number, whereas the value should be specification of
+   *   descriptor in the format as expected by proc_open() function. The first 3
+   *   descriptors are reserved for STDIN, STDOUT and STDERR, so
+   *   $extra_descriptors must start from file descriptor #3
    */
-  function __construct($cmd, array $args = array(), $process_callback = NULL, array $process_callback_arguments = array()) {
+  function __construct($cmd, array $args = array(), $process_callback = NULL, array $process_callback_arguments = array(), $extra_descriptors = array()) {
     $this->cmd = $cmd;
     $this->args = $args;
     $this->process_callback = $process_callback;
@@ -197,12 +207,12 @@ class ToolsAsyncResult implements ToolsResultInterface{
       0 => array('pipe', 'r'),
       1 => array('pipe', 'w'),
       2 => array('pipe', 'w'),
-    );
+    ) + $extra_descriptors;
 
     $cmd = escapeshellcmd($cmd);
     foreach ($args as $arg) {
       if (is_array($arg['value'])) {
-        print_r($arg);exit;
+        trigger_error('Argument ' . $arg['key'] . ' has array value.');
       }
       $cmd .= ' ' . $arg['key'] . $arg['glue'];
       if ($arg['value']) {
@@ -210,7 +220,13 @@ class ToolsAsyncResult implements ToolsResultInterface{
       }
     }
 
-    $this->process = proc_open($cmd, $descriptorspec, $this->pipes);
+    // We explicitly run it through bash, because if $cmd is opened directly,
+    // it is executed through /bin/sh, which is SH compatibility mode (and
+    // thereby has reduced functions). See http://askubuntu.com/questions/422492/why-script-with-bin-bash-is-working-with-bin-sh-not
+    $this->process = proc_open('bash', $descriptorspec, $this->pipes);
+    fwrite($this->pipes[0], $cmd);
+    fclose($this->pipes[0]);
+
     if (!is_resource($this->process)) {
       trigger_error('Could not initialize asynchronous call of ' . $this->cmd);
     }
@@ -224,6 +240,13 @@ class ToolsAsyncResult implements ToolsResultInterface{
     if (is_resource($this->process)) {
       $stdout = stream_get_contents($this->pipes[1]);
       $stderr = stream_get_contents($this->pipes[2]);
+
+      $streams = array();
+      foreach ($this->pipes as $k => $pipe) {
+        if (!in_array($k, array(0, 1, 2))) {
+          $streams[$k] = stream_get_contents($this->pipes[$k]);
+        }
+      }
 
       $this->closePipes();
       $exit_code = proc_close($this->process);
@@ -243,6 +266,7 @@ class ToolsAsyncResult implements ToolsResultInterface{
         'exit' => $exit_code,
         'stdout' => $stdout,
         'stderr' => $stderr,
+        'streams' => $streams,
       );
 
       if ($exit_code !== 0) {
